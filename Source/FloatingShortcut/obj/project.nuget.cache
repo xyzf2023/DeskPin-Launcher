@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "iF0sMka0cXM=",
+  "success": true,
+  "projectFilePath": "D:\\Rimworld_MOD_dev\\便捷工具开发\\Source\\FloatingShortcut\\FloatingShortcut.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\MECHREV\\.nuget\\packages\\microsoft.win32.systemevents\\10.0.7\\microsoft.win32.systemevents.10.0.7.nupkg.sha512",
+    "C:\\Users\\MECHREV\\.nuget\\packages\\system.drawing.common\\10.0.7\\system.drawing.common.10.0.7.nupkg.sha512"
+  ],
+  "logs": []
+}
