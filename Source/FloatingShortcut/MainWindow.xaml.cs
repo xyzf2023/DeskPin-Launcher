@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -15,7 +14,6 @@ public partial class MainWindow : Window
     private readonly ConfigService _configService = new();
     private readonly ShellIconService _shellIconService = new();
     private readonly LauncherService _launcherService = new();
-    private readonly Stopwatch _dragHoldWatch = new();
     private readonly AppConfig _config;
     private bool _isLeftPressed;
     private bool _dragStarted;
@@ -197,7 +195,6 @@ public partial class MainWindow : Window
             _isLeftPressed = true;
             _dragStarted = false;
             _dragStartScreenPoint = PointToScreen(e.GetPosition(this));
-            _dragHoldWatch.Restart();
             CaptureMouse();
         }
         catch (Exception ex)
@@ -213,14 +210,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!_dragHoldWatch.IsRunning || _dragHoldWatch.ElapsedMilliseconds < 250)
-        {
-            return;
-        }
-
         var currentPoint = PointToScreen(e.GetPosition(this));
-        if (Math.Abs(currentPoint.X - _dragStartScreenPoint.X) < 2 &&
-            Math.Abs(currentPoint.Y - _dragStartScreenPoint.Y) < 2)
+        var deltaX = Math.Abs(currentPoint.X - _dragStartScreenPoint.X);
+        var deltaY = Math.Abs(currentPoint.Y - _dragStartScreenPoint.Y);
+        if (deltaX < SystemParameters.MinimumHorizontalDragDistance &&
+            deltaY < SystemParameters.MinimumVerticalDragDistance)
         {
             return;
         }
@@ -228,7 +222,6 @@ public partial class MainWindow : Window
         try
         {
             _dragStarted = true;
-            _dragHoldWatch.Reset();
             ReleaseMouseCapture();
             DragMove();
             SaveConfigSafe();
@@ -252,7 +245,6 @@ public partial class MainWindow : Window
     {
         _isLeftPressed = false;
         _dragStarted = false;
-        _dragHoldWatch.Reset();
 
         if (IsMouseCaptured)
             ReleaseMouseCapture();

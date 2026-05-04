@@ -4,6 +4,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Write-Host "开始发布 FloatingShortcut..."
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path (Join-Path $repoRoot "Source"))) {
     $repoRoot = $PSScriptRoot
@@ -15,6 +17,11 @@ $targetExe = Join-Path $repoRoot "FloatingShortcut.exe"
 
 if (-not (Test-Path $projectPath)) {
     throw "找不到项目文件：$projectPath"
+}
+
+Write-Host "清理旧文件..."
+if (Test-Path $targetExe) {
+    Remove-Item $targetExe -Force
 }
 
 if (Test-Path $publishDir) {
@@ -39,3 +46,17 @@ Copy-Item $publishedExe $targetExe -Force
 Remove-Item $publishDir -Recurse -Force
 
 Write-Host "发布完成：$targetExe"
+
+$projectRoot = Join-Path $repoRoot "Source\FloatingShortcut"
+$binDir = Join-Path $projectRoot "bin"
+$objDir = Join-Path $projectRoot "obj"
+
+if (Test-Path $binDir) {
+    Remove-Item $binDir -Recurse -Force
+}
+
+if (Test-Path $objDir) {
+    Remove-Item $objDir -Recurse -Force
+}
+
+Write-Host "已清理 bin/obj"
