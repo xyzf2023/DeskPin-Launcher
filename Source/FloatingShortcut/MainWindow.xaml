@@ -14,43 +14,33 @@
         Background="Transparent"
         AllowsTransparency="True"
         MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        MouseMove="Window_MouseMove"
+        MouseLeftButtonUp="Window_MouseLeftButtonUp"
         Closing="Window_Closing">
-    <Border x:Name="OuterBorder"
-            CornerRadius="10"
-            BorderThickness="1"
-            BorderBrush="#00000000"
-            Background="#CC1E1E1E">
-        <Border.Style>
-            <Style TargetType="Border">
-                <Setter Property="BorderBrush" Value="#00000000" />
-                <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="BorderBrush" Value="#66FFFFFF" />
-                    </Trigger>
-                </Style.Triggers>
-            </Style>
-        </Border.Style>
+    <Grid Background="Transparent">
+        <Ellipse x:Name="OuterCircle"
+                 Width="72"
+                 Height="72"
+                 Fill="#CC1E1E1E"
+                 StrokeThickness="1"
+                 Stroke="#00000000">
+            <Ellipse.Style>
+                <Style TargetType="Ellipse">
+                    <Setter Property="Stroke" Value="#00000000" />
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Stroke" Value="#66FFFFFF" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Ellipse.Style>
+        </Ellipse>
 
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <Border x:Name="DragHandle"
-                    Grid.Column="0"
-                    Background="#CC2F80ED"
-                    MouseLeftButtonDown="DragHandle_MouseLeftButtonDown"
-                    MouseMove="DragHandle_MouseMove"
-                    MouseLeftButtonUp="DragHandle_MouseLeftButtonUp" />
-
-            <Image x:Name="IconImage"
-                   Grid.Column="1"
-                   Width="48"
-                   Height="48"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   SnapsToDevicePixels="True" />
-        </Grid>
-    </Border>
+        <Image x:Name="IconImage"
+               Width="48"
+               Height="48"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               SnapsToDevicePixels="True" />
+    </Grid>
 </Window>

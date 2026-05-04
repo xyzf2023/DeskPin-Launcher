@@ -17,7 +17,9 @@ public partial class MainWindow : Window
     private readonly LauncherService _launcherService = new();
     private readonly Stopwatch _dragHoldWatch = new();
     private readonly AppConfig _config;
-    private bool _isDragging;
+    private bool _isLeftPressed;
+    private bool _dragStarted;
+    private Point _dragStartScreenPoint;
 
     public MainWindow()
     {
@@ -185,17 +187,18 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (e.ClickCount != 2)
+            if (e.ClickCount == 2)
             {
+                CancelDragTracking();
+                _launcherService.Launch(_config.TargetPath ?? string.Empty);
                 return;
             }
 
-            if (e.OriginalSource is DependencyObject source && IsInsideDragHandle(source))
-            {
-                return;
-            }
-
-            _launcherService.Launch(_config.TargetPath ?? string.Empty);
+            _isLeftPressed = true;
+            _dragStarted = false;
+            _dragStartScreenPoint = PointToScreen(e.GetPosition(this));
+            _dragHoldWatch.Restart();
+            CaptureMouse();
         }
         catch (Exception ex)
         {
@@ -203,33 +206,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private bool IsInsideDragHandle(DependencyObject source)
+    private void Window_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        var current = source;
-        while (current != null)
-        {
-            if (ReferenceEquals(current, DragHandle))
-            {
-                return true;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return false;
-    }
-
-    private void DragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        _isDragging = false;
-        _dragHoldWatch.Restart();
-        DragHandle.CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void DragHandle_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed)
+        if (!_isLeftPressed || _dragStarted || e.LeftButton != MouseButtonState.Pressed)
         {
             return;
         }
@@ -239,15 +218,20 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_isDragging)
+        var currentPoint = PointToScreen(e.GetPosition(this));
+        if (Math.Abs(currentPoint.X - _dragStartScreenPoint.X) < 2 &&
+            Math.Abs(currentPoint.Y - _dragStartScreenPoint.Y) < 2)
         {
             return;
         }
 
         try
         {
-            _isDragging = true;
+            _dragStarted = true;
+            _dragHoldWatch.Reset();
+            ReleaseMouseCapture();
             DragMove();
+            SaveConfigSafe();
         }
         catch
         {
@@ -255,24 +239,23 @@ public partial class MainWindow : Window
         }
         finally
         {
-            _dragHoldWatch.Reset();
-            if (DragHandle.IsMouseCaptured)
-            {
-                DragHandle.ReleaseMouseCapture();
-            }
-
-            _isDragging = false;
-            SaveConfigSafe();
+            CancelDragTracking();
         }
     }
 
-    private void DragHandle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    private void Window_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        CancelDragTracking();
+    }
+
+    private void CancelDragTracking()
+    {
+        _isLeftPressed = false;
+        _dragStarted = false;
         _dragHoldWatch.Reset();
-        if (DragHandle.IsMouseCaptured)
-        {
-            DragHandle.ReleaseMouseCapture();
-        }
+
+        if (IsMouseCaptured)
+            ReleaseMouseCapture();
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)

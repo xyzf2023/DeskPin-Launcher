@@ -5,3 +5,5 @@ obj/
 *.suo
 *.cache
 *.log
+FloatingShortcut.exe
+.publish-root/
