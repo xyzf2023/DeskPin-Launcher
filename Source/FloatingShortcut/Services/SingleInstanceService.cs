@@ -95,7 +95,7 @@ public sealed class SingleInstanceService : IDisposable
                     continue;
                 }
 
-                var app = Application.Current;
+                var app = System.Windows.Application.Current;
                 if (app?.Dispatcher is null)
                 {
                     continue;

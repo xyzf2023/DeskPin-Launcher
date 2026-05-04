@@ -9,10 +9,18 @@ public sealed class ShortcutWindowManager
     private readonly ConfigService _configService = new();
     private readonly List<ShortcutWindow> _windows = new();
     private AppConfig _config = new();
+    private TrayIconService? _trayIconService;
 
     public ShellIconService ShellIcons { get; } = new();
 
     public LauncherService Launcher { get; } = new();
+
+    public bool ShowShortcutNames => _config.ShowShortcutNames;
+
+    public void SetTrayIconService(TrayIconService trayIconService)
+    {
+        _trayIconService = trayIconService;
+    }
 
     public void Start()
     {
@@ -35,6 +43,108 @@ public sealed class ShortcutWindowManager
         }
 
         _configService.Save(_config);
+    }
+
+    public void ToggleShowShortcutNames()
+    {
+        _config.ShowShortcutNames = !_config.ShowShortcutNames;
+        SaveAll();
+        RefreshAllWindowDisplayMode();
+    }
+
+    public void RefreshAllWindowDisplayMode()
+    {
+        foreach (var w in _windows.ToList())
+        {
+            w.ApplyDisplayMode();
+            w.RefreshDisplayName();
+        }
+    }
+
+    public void CloseWindowTemporarily(ShortcutWindow w)
+    {
+        w.SyncToConfig();
+        _windows.Remove(w);
+        SaveAll();
+        w.InternalClose();
+    }
+
+    public void HideAllWindows()
+    {
+        foreach (var w in _windows.ToList())
+        {
+            w.SyncToConfig();
+            _windows.Remove(w);
+            w.InternalClose();
+        }
+
+        SaveAll();
+    }
+
+    public void ShowAllWindows()
+    {
+        _config.EnsureShortcuts();
+
+        if (_config.Shortcuts.Count == 0)
+        {
+            _config.Shortcuts.Add(new ShortcutConfig { Id = Guid.NewGuid().ToString("N") });
+        }
+
+        foreach (var sc in _config.Shortcuts)
+        {
+            var existing = FindWindowByShortcutId(sc.Id);
+            if (existing is not null)
+            {
+                existing.Show();
+                existing.WindowState = WindowState.Normal;
+                existing.Topmost = true;
+                existing.Activate();
+            }
+            else
+            {
+                OpenWindowFor(sc);
+            }
+        }
+
+        SaveAll();
+    }
+
+    public void NewBlankWindowFromTray()
+    {
+        double left;
+        double top;
+
+        if (_windows.Count > 0)
+        {
+            var last = _windows[^1];
+            last.SyncToConfig();
+            left = last.Left + 20;
+            top = last.Top + 20;
+        }
+        else if (_config.Shortcuts.Count > 0)
+        {
+            var lastSc = _config.Shortcuts[^1];
+            left = lastSc.WindowLeft + 20;
+            top = lastSc.WindowTop + 20;
+        }
+        else
+        {
+            left = 100;
+            top = 100;
+        }
+
+        var sc = new ShortcutConfig
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            TargetPath = null,
+            WindowSize = 72,
+            WindowLeft = left,
+            WindowTop = top
+        };
+
+        _config.Shortcuts.Add(sc);
+        SaveAll();
+        OpenWindowFor(sc);
     }
 
     public void DuplicateWindow(ShortcutWindow source)
@@ -101,7 +211,7 @@ public sealed class ShortcutWindowManager
     {
         if (_windows.Count == 1)
         {
-            var result = MessageBox.Show(
+            var result = System.Windows.MessageBox.Show(
                 "这是最后一个快捷窗口，删除后将创建一个空白快捷窗口。是否继续？",
                 "FloatingShortcut",
                 MessageBoxButton.YesNo,
@@ -142,12 +252,19 @@ public sealed class ShortcutWindowManager
         }
 
         _windows.Clear();
-        Application.Current.Shutdown();
+        _trayIconService?.Dispose();
+        _trayIconService = null;
+        System.Windows.Application.Current.Shutdown();
     }
 
     public void ShutdownOnExit()
     {
         SaveAll();
+    }
+
+    private ShortcutWindow? FindWindowByShortcutId(string id)
+    {
+        return _windows.FirstOrDefault(w => w.Shortcut.Id == id);
     }
 
     private void OpenWindowFor(ShortcutConfig sc)

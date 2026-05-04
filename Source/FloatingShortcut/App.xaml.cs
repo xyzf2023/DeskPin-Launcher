@@ -7,6 +7,7 @@ public partial class App : System.Windows.Application
 {
     private SingleInstanceService? _singleInstance;
     private ShortcutWindowManager? _manager;
+    private TrayIconService? _trayIconService;
 
     private void Application_Startup(object sender, StartupEventArgs e)
     {
@@ -15,7 +16,7 @@ public partial class App : System.Windows.Application
         {
             if (!SingleInstanceService.TryNotifyNewBlankWindow())
             {
-                MessageBox.Show(
+                System.Windows.MessageBox.Show(
                     "无法通知已运行的 FloatingShortcut，请手动右键新建窗口。",
                     "FloatingShortcut",
                     MessageBoxButton.OK,
@@ -27,13 +28,17 @@ public partial class App : System.Windows.Application
         }
 
         _manager = new ShortcutWindowManager();
+        _trayIconService = new TrayIconService(_manager);
+        _manager.SetTrayIconService(_trayIconService);
         _manager.Start();
         _singleInstance.StartPipeServer(_manager);
+        _trayIconService.Initialize();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         _manager?.ShutdownOnExit();
+        _trayIconService?.Dispose();
         _singleInstance?.Stop();
         base.OnExit(e);
     }

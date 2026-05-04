@@ -13,6 +13,9 @@ public sealed class AppConfig
 
     public List<ShortcutConfig> Shortcuts { get; set; } = new();
 
+    /// <summary>是否在圆形按钮下方显示绑定目标名称。</summary>
+    public bool ShowShortcutNames { get; set; }
+
     /// <summary>
     /// 确保 <see cref="Shortcuts"/> 至少包含一项。
     /// 若列表为空，则根据旧字段迁移或创建默认快捷项。

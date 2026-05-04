@@ -5,6 +5,7 @@ using System.Windows.Input;
 using FloatingShortcut.Models;
 using FloatingShortcut.Services;
 using Microsoft.Win32;
+using WpfMenuItem = System.Windows.Controls.MenuItem;
 
 namespace FloatingShortcut;
 
@@ -14,7 +15,8 @@ public partial class ShortcutWindow : Window
     private bool _allowClose;
     private bool _isLeftPressed;
     private bool _dragStarted;
-    private Point _dragStartScreenPoint;
+    private System.Windows.Point _dragStartScreenPoint;
+    private WpfMenuItem? _showNamesMenuItem;
 
     public ShortcutConfig Shortcut { get; }
 
@@ -23,16 +25,43 @@ public partial class ShortcutWindow : Window
         _manager = manager;
         Shortcut = shortcut;
         InitializeComponent();
-        ApplyWindowFromShortcut();
+        ApplyPositionFromShortcut();
+        ApplyDisplayMode();
         SetupContextMenu();
         RefreshIcon();
+        RefreshDisplayName();
+    }
+
+    /// <summary>根据全局配置刷新窗口尺寸与名称区域显示。</summary>
+    public void ApplyDisplayMode()
+    {
+        var diam = Shortcut.WindowSize <= 0 ? 72 : Shortcut.WindowSize;
+        CircleHost.Width = CircleHost.Height = diam;
+        OuterCircle.Width = OuterCircle.Height = diam;
+        CircleRow.Height = new GridLength(diam);
+
+        if (!_manager.ShowShortcutNames)
+        {
+            NameRow.Height = new GridLength(0);
+            NameText.Visibility = Visibility.Collapsed;
+            Width = diam;
+            Height = diam;
+        }
+        else
+        {
+            NameRow.Height = GridLength.Auto;
+            NameText.Visibility = Visibility.Visible;
+            Width = 120;
+            Height = 96;
+            RefreshDisplayName();
+        }
     }
 
     public void SyncToConfig()
     {
         Shortcut.WindowLeft = Left;
         Shortcut.WindowTop = Top;
-        Shortcut.WindowSize = Width;
+        // WindowSize 表示圆形主体尺寸，不从整窗 Width 写入
     }
 
     /// <summary>仅由管理器调用，用于关闭窗口。</summary>
@@ -42,12 +71,8 @@ public partial class ShortcutWindow : Window
         Close();
     }
 
-    private void ApplyWindowFromShortcut()
+    private void ApplyPositionFromShortcut()
     {
-        var size = Shortcut.WindowSize <= 0 ? 72 : Shortcut.WindowSize;
-        Width = size;
-        Height = size;
-
         var left = NormalizeCoordinate(Shortcut.WindowLeft, 100);
         var top = NormalizeCoordinate(Shortcut.WindowTop, 100);
         Left = left;
@@ -61,7 +86,8 @@ public partial class ShortcutWindow : Window
 
     private void SetupContextMenu()
     {
-        var menu = new ContextMenu();
+        var menu = new System.Windows.Controls.ContextMenu();
+        menu.Opened += ContextMenu_Opened;
 
         menu.Items.Add(CreateMenuItem("绑定文件 / 程序", (_, _) => BindFileOrProgram()));
         menu.Items.Add(CreateMenuItem("绑定文件夹", (_, _) => BindFolder()));
@@ -70,7 +96,18 @@ public partial class ShortcutWindow : Window
         menu.Items.Add(CreateMenuItem("打开目标所在位置", (_, _) => OpenTargetLocation()));
         menu.Items.Add(CreateMenuItem("复制当前快捷窗口", (_, _) => _manager.DuplicateWindow(this)));
         menu.Items.Add(CreateMenuItem("新建空白快捷窗口", (_, _) => _manager.NewBlankWindow(this)));
+        menu.Items.Add(CreateMenuItem("关闭当前窗口", (_, _) => _manager.CloseWindowTemporarily(this)));
         menu.Items.Add(CreateMenuItem("删除当前快捷窗口", (_, _) => _manager.RemoveWindow(this)));
+        menu.Items.Add(new Separator());
+
+        _showNamesMenuItem = new WpfMenuItem
+        {
+            Header = "显示绑定名称",
+            IsCheckable = true
+        };
+        _showNamesMenuItem.Click += (_, _) => _manager.ToggleShowShortcutNames();
+        menu.Items.Add(_showNamesMenuItem);
+
         menu.Items.Add(new Separator());
         menu.Items.Add(CreateMenuItem("清除当前绑定", (_, _) => ClearBinding()));
         menu.Items.Add(new Separator());
@@ -79,9 +116,17 @@ public partial class ShortcutWindow : Window
         ContextMenu = menu;
     }
 
-    private static MenuItem CreateMenuItem(string header, RoutedEventHandler onClick)
+    private void ContextMenu_Opened(object sender, RoutedEventArgs e)
     {
-        var item = new MenuItem { Header = header };
+        if (_showNamesMenuItem is not null)
+        {
+            _showNamesMenuItem.IsChecked = _manager.ShowShortcutNames;
+        }
+    }
+
+    private static WpfMenuItem CreateMenuItem(string header, RoutedEventHandler onClick)
+    {
+        var item = new WpfMenuItem { Header = header };
         item.Click += onClick;
         return item;
     }
@@ -91,11 +136,68 @@ public partial class ShortcutWindow : Window
         IconImage.Source = _manager.ShellIcons.GetIconForPath(Shortcut.TargetPath);
     }
 
+    public string GetDisplayName()
+    {
+        var path = Shortcut.TargetPath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "未绑定";
+        }
+
+        try
+        {
+            path = path.Trim();
+            var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var root = Path.GetPathRoot(path);
+            if (!string.IsNullOrEmpty(root))
+            {
+                var rootTrim = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.Equals(trimmed, rootTrim, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(path, root, StringComparison.OrdinalIgnoreCase))
+                {
+                    return path.EndsWith(Path.DirectorySeparatorChar) || path.EndsWith(Path.AltDirectorySeparatorChar)
+                        ? path
+                        : path + Path.DirectorySeparatorChar;
+                }
+            }
+
+            if (Directory.Exists(path))
+            {
+                return new DirectoryInfo(path).Name;
+            }
+
+            if (File.Exists(path))
+            {
+                return Path.GetFileName(path) ?? path;
+            }
+
+            var fileName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            return string.IsNullOrEmpty(fileName) ? path : fileName;
+        }
+        catch
+        {
+            try
+            {
+                var fn = Path.GetFileName(path);
+                return string.IsNullOrEmpty(fn) ? path : fn;
+            }
+            catch
+            {
+                return path;
+            }
+        }
+    }
+
+    public void RefreshDisplayName()
+    {
+        NameText.Text = GetDisplayName();
+    }
+
     private void BindFileOrProgram()
     {
         try
         {
-            var dialog = new OpenFileDialog
+            var dialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "选择要绑定的文件或程序",
                 CheckFileExists = true
@@ -105,6 +207,7 @@ public partial class ShortcutWindow : Window
             {
                 Shortcut.TargetPath = dialog.FileName;
                 RefreshIcon();
+                RefreshDisplayName();
                 _manager.SaveAll();
             }
         }
@@ -127,6 +230,7 @@ public partial class ShortcutWindow : Window
             {
                 Shortcut.TargetPath = dialog.FolderName;
                 RefreshIcon();
+                RefreshDisplayName();
                 _manager.SaveAll();
             }
         }
@@ -140,28 +244,29 @@ public partial class ShortcutWindow : Window
     {
         try
         {
-            if (!Clipboard.ContainsText())
+            if (!System.Windows.Clipboard.ContainsText())
             {
-                MessageBox.Show(this, "剪贴板没有可用路径。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show(this, "剪贴板没有可用路径。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            var raw = Clipboard.GetText()?.Trim();
+            var raw = System.Windows.Clipboard.GetText()?.Trim();
             if (string.IsNullOrWhiteSpace(raw))
             {
-                MessageBox.Show(this, "剪贴板路径为空。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show(this, "剪贴板路径为空。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             var path = raw.Trim('"');
             if (!File.Exists(path) && !Directory.Exists(path))
             {
-                MessageBox.Show(this, "路径不存在。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show(this, "路径不存在。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             Shortcut.TargetPath = path;
             RefreshIcon();
+            RefreshDisplayName();
             _manager.SaveAll();
         }
         catch (Exception ex)
@@ -188,6 +293,7 @@ public partial class ShortcutWindow : Window
         {
             Shortcut.TargetPath = null;
             RefreshIcon();
+            RefreshDisplayName();
             _manager.SaveAll();
         }
         catch (Exception ex)
@@ -218,7 +324,7 @@ public partial class ShortcutWindow : Window
         }
     }
 
-    private void Window_MouseMove(object sender, MouseEventArgs e)
+    private void Window_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
         if (!_isLeftPressed || _dragStarted || e.LeftButton != MouseButtonState.Pressed)
         {
@@ -281,6 +387,6 @@ public partial class ShortcutWindow : Window
 
     private void ShowError(string title, Exception ex)
     {
-        MessageBox.Show(this, $"{title}\n{ex.Message}", "FloatingShortcut", MessageBoxButton.OK, MessageBoxImage.Warning);
+        System.Windows.MessageBox.Show(this, $"{title}\n{ex.Message}", "FloatingShortcut", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }
