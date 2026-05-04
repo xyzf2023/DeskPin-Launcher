@@ -72,6 +72,31 @@ public sealed class ShortcutWindowManager
         OpenWindowFor(sc);
     }
 
+    /// <summary>
+    /// 二次启动等外部请求：在最后一个窗口右下偏移新建空白快捷，无窗口时用默认位置。
+    /// </summary>
+    public void NewBlankWindowFromExternalLaunch()
+    {
+        ShortcutWindow? reference = _windows.Count > 0 ? _windows[^1] : null;
+        if (reference is not null)
+        {
+            reference.SyncToConfig();
+        }
+
+        var sc = new ShortcutConfig
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            TargetPath = null,
+            WindowSize = 72,
+            WindowLeft = reference is not null ? reference.Left + 20 : 100,
+            WindowTop = reference is not null ? reference.Top + 20 : 100
+        };
+
+        _config.Shortcuts.Add(sc);
+        SaveAll();
+        OpenWindowFor(sc);
+    }
+
     public void RemoveWindow(ShortcutWindow w)
     {
         if (_windows.Count == 1)
